@@ -10,3 +10,7 @@ def read_root():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+@app.get("/readyz")
+def readyz():
+    return {"status": "ok"}
