@@ -32,14 +32,17 @@ engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
 
 @app.get("/")
 def read_root():
+    logging.info("Root says OK")
     return {"message": "Hello from FastAPI!"}
 
 @app.get("/healthz")
 def healthz():
+    logging.info("Health check OK")
     return {"status": "ok"}
 
 @app.get("/readyz")
 def readyz():
+    logging.info("Ready check OK")
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
