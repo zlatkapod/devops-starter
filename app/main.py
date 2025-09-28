@@ -3,46 +3,45 @@ import json
 import logging
 import os
 import sys
+import time
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from sqlalchemy import text
 from sqlalchemy.engine import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from fastapi import Response, Request
-import time
 
-REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
-REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Request latency", ["endpoint"])
-
-# Custom JSON formatter
 class JsonFormatter(logging.Formatter):
     def format(self, record):
-        log_record = {
+        payload = {
             "level": record.levelname,
             "logger": record.name,
             "time": self.formatTime(record, self.datefmt),
             "message": record.getMessage(),
         }
         if record.exc_info:
-            log_record["exc_info"] = self.formatException(record.exc_info)
-        return json.dumps(log_record)
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
 
-# Apply formatter to root logger
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(JsonFormatter())
 logging.basicConfig(handlers=[handler], level=logging.INFO)
+
 app = FastAPI(title="Starter FastAPI")
+
+REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
+REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Request latency", ["endpoint"])
+
 engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
 
 @app.middleware("http")
 async def prometheus_middleware(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
-    resp_time = time.time() - start
-    REQUEST_COUNT.labels(request.method, request.url.path, response.status_code).inc()
-    REQUEST_LATENCY.labels(request.url.path).observe(resp_time)
+    duration = time.time() - start
+    REQUEST_COUNT.labels(request.method, request.url.path, str(response.status_code)).inc()
+    REQUEST_LATENCY.labels(request.url.path).observe(duration)
     return response
 
 @app.get("/metrics")
