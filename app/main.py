@@ -9,6 +9,26 @@ from sqlalchemy import text
 from sqlalchemy.engine import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from fastapi import Response
+import time
+
+REQUEST_COUNT = Counter("http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"])
+REQUEST_LATENCY = Histogram("http_request_duration_seconds", "Request latency", ["endpoint"])
+
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    resp_time = time.time() - start
+    REQUEST_COUNT.labels(request.method, request.url.path, response.status_code).inc()
+    REQUEST_LATENCY.labels(request.url.path).observe(resp_time)
+    return response
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 # Custom JSON formatter
 class JsonFormatter(logging.Formatter):
