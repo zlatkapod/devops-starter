@@ -40,8 +40,19 @@ async def prometheus_middleware(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
     duration = time.time() - start
-    REQUEST_COUNT.labels(request.method, request.url.path, str(response.status_code)).inc()
-    REQUEST_LATENCY.labels(request.url.path).observe(duration)
+    path = request.url.path
+    status = response.status_code
+
+    REQUEST_COUNT.labels(request.method, path, str(status)).inc()
+    REQUEST_LATENCY.labels(path).observe(duration)
+
+    logging.info(json.dumps({
+        "event": "http_request",
+        "method": request.method,
+        "path": path,
+        "status": status,
+        "duration_s": round(duration, 6),
+    }))
     return response
 
 @app.get("/metrics")
